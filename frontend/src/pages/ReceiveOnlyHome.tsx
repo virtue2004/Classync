@@ -42,6 +42,14 @@ export function ReceiveOnlyHome() {
       </div>
 
       {ownerExists === false && <OwnerSetup />}
+      {ownerExists === true && (
+        <details style={{ width: "min(100% - 2rem, 480px)", marginTop: "1rem" }}>
+          <summary className="muted" style={{ cursor: "pointer" }}>
+            Are you the server administrator? Recover owner access
+          </summary>
+          <OwnerSetup recovery />
+        </details>
+      )}
 
       <InstallButton />
     </div>
