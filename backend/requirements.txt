@@ -1,0 +1,15 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+sqlalchemy==2.0.35
+pydantic==2.9.2
+pydantic-settings==2.5.2
+python-multipart==0.0.9
+python-magic==0.4.27
+# On Windows, python-magic needs the native libmagic library, which isn't
+# installed by default. Either install it via python-magic-bin instead:
+#   pip uninstall python-magic
+#   pip install python-magic-bin==0.4.14
+# or leave it as-is — file_validation.py falls back gracefully if libmagic
+# isn't usable, it just skips the deep content-type check in that case.
+zeroconf==0.135.0
+qrcode[pil]==7.4.2
