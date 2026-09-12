@@ -42,7 +42,11 @@ def setup_status(db: Session = Depends(get_db)):
 
 
 def _check_setup_key(key: str) -> None:
-    if not settings.OWNER_SETUP_KEY or not secrets.compare_digest(key, settings.OWNER_SETUP_KEY):
+    # Keys are often copied from a terminal. Ignore surrounding whitespace
+    # introduced by the selection while keeping the key itself exact.
+    submitted_key = key.strip()
+    configured_key = settings.OWNER_SETUP_KEY.strip()
+    if not configured_key or not secrets.compare_digest(submitted_key, configured_key):
         raise HTTPException(status_code=403, detail="The setup key is incorrect.")
 
 
@@ -78,12 +82,11 @@ def claim_owner(payload: OwnerClaimRequest, device: Device = Depends(get_current
 
 @router.post("/recover-owner", response_model=DeviceOut)
 def recover_owner(payload: OwnerClaimRequest, device: Device = Depends(get_current_device), db: Session = Depends(get_db)):
-    """Host-only recovery path for migrated or lost owner credentials."""
+    """Authorize an additional owner device using the host-only setup key."""
     _check_setup_key(payload.setup_key)
-    db.query(Device).filter(Device.is_owner.is_(True)).update({Device.is_owner: False, Device.can_share: False})
     device.is_owner = True
     device.can_share = True
-    db.add(AuditLog(device_id=device.id, action="recover_owner", detail="owner recovered with setup key"))
+    db.add(AuditLog(device_id=device.id, action="link_owner", detail="owner device linked with setup key"))
     db.commit()
     db.refresh(device)
     return device

@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { Share, ShareCreateResponse } from "../types";
 import { ShareConnectCard } from "../components/ShareConnectCard";
+import { useDevice } from "../context/DeviceContext";
 
 export function Shares() {
+  const { device } = useDevice();
   const [shares, setShares] = useState<Share[]>([]);
   const [label, setLabel] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -20,6 +22,10 @@ export function Shares() {
 
   useEffect(() => {
     loadShares();
+    const refreshTimer = window.setInterval(() => {
+      loadShares().catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(refreshTimer);
   }, []);
 
   function addFiles(list: FileList | null) {
@@ -124,10 +130,14 @@ export function Shares() {
           </p>
         )}
 
+        <p className="muted">
+          Files are checked for corruption and scanned by the server's antivirus before the share is published.
+        </p>
+
         {error && <p className="error">{error}</p>}
 
         <button type="submit" disabled={creating}>
-          {creating ? "Sharing..." : "Share"}
+          {creating ? "Scanning files..." : "Scan and share"}
         </button>
       </form>
 
@@ -135,7 +145,7 @@ export function Shares() {
         <ShareConnectCard info={activeConnectInfo} onClose={() => setActiveConnectInfo(null)} />
       )}
 
-      <h2 style={{ marginTop: "2.5rem" }}>Your shares</h2>
+      <h2 style={{ marginTop: "2.5rem" }}>{device?.is_owner ? "Owner shares" : "Your shares"}</h2>
       <table className="table">
         <thead>
           <tr>

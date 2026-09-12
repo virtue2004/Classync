@@ -31,9 +31,28 @@ Write-Host "Installing backend dependencies..." -ForegroundColor Yellow
 if (-not (Test-Path ".env")) {
     Copy-Item ".env.example" ".env"
     $setupKey = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
-    (Get-Content ".env") -replace "OWNER_SETUP_KEY=replace-with-a-long-random-value", "OWNER_SETUP_KEY=$setupKey" | Set-Content ".env"
+    # Windows PowerShell 5 defaults Set-Content to UTF-16, which Python's .env
+    # loader cannot reliably read. Always write the configuration as UTF-8.
+    (Get-Content ".env") -replace "OWNER_SETUP_KEY=replace-with-a-long-random-value", "OWNER_SETUP_KEY=$setupKey" | Set-Content ".env" -Encoding utf8
     Write-Host "Server setup key: $setupKey" -ForegroundColor Yellow
     Write-Host "Keep this key private. You will enter it once in the browser." -ForegroundColor Yellow
+}
+
+# Upgrade configuration files created by older releases. A valid key is kept
+# unchanged; a missing or placeholder key is replaced exactly once.
+$setupKeyLine = Get-Content ".env" | Where-Object {
+    $_ -match "^OWNER_SETUP_KEY=" -and $_ -notmatch "replace-with-a-long-random-value$"
+} | Select-Object -First 1
+if (-not $setupKeyLine) {
+    $setupKey = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
+    $envLines = Get-Content ".env"
+    if ($envLines -match "^OWNER_SETUP_KEY=") {
+        $envLines = $envLines -replace "^OWNER_SETUP_KEY=.*$", "OWNER_SETUP_KEY=$setupKey"
+        $envLines | Set-Content ".env" -Encoding utf8
+    } else {
+        Add-Content ".env" "OWNER_SETUP_KEY=$setupKey" -Encoding utf8
+    }
+    Write-Host "A new server setup key was created: $setupKey" -ForegroundColor Yellow
 }
 
 Set-Location $frontendPath

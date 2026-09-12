@@ -46,6 +46,9 @@ class ShareFileOut(BaseModel):
     original_name: str
     content_type: str
     size_bytes: int
+    sha256: str
+    scan_status: str
+    scan_message: str
 
 
 class ShareOut(BaseModel):

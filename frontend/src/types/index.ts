@@ -43,6 +43,9 @@ export interface ShareFile {
   original_name: string;
   content_type: string;
   size_bytes: number;
+  sha256?: string;
+  scan_status?: "clean" | "suspicious" | "unscanned";
+  scan_message?: string;
 }
 
 export interface Share {

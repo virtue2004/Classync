@@ -9,6 +9,7 @@ import { FilePreviewModal } from "../components/FilePreviewModal";
 import { InstallButton } from "../components/InstallButton";
 import { QrScannerModal } from "../components/QrScannerModal";
 import { canUseCamera, cameraUnavailableReason } from "../api/camera";
+import { DeviceName } from "../components/DeviceName";
 
 const RETRY_DELAY_MS = 4000;
 
@@ -18,8 +19,16 @@ function formatSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function safetyStatus(file: ShareFile): "clean" | "suspicious" | "unscanned" {
+  return file.scan_status || "unscanned";
+}
+
+function safetyMessage(file: ShareFile): string {
+  return file.scan_message || "This file was uploaded before safety scanning information was available.";
+}
+
 export function Receive() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [combinedInput, setCombinedInput] = useState("");
   const [serverUrl, setServerUrl] = useState("");
@@ -80,17 +89,53 @@ export function Receive() {
     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
   }
 
+  function resetReceive() {
+    cancelRetry();
+    setShare(null);
+    setServerUrl("");
+    setShareCode("");
+    setCombinedInput("");
+    setError("");
+    setLoading(false);
+    setPreviewFile(null);
+    setSearchParams({}, { replace: true });
+  }
+
+  function handleCodeChange(value: string) {
+    // A QR/history URL may be retrying in the background. As soon as the user
+    // chooses to type, cancel that old request so it cannot take over the UI.
+    if (retrying) cancelRetry();
+    setError("");
+    setCombinedInput(value);
+  }
+
   useEffect(() => {
     const qsServer = searchParams.get("server");
     const qsCode = searchParams.get("code");
     if (qsServer && qsCode) {
-      fetchShare(qsServer, qsCode);
+      openShare(qsServer, qsCode);
     }
     return () => {
       if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function openShare(server: string, code: string) {
+    const target = new URL("/receive", server);
+    target.searchParams.set("server", server.replace(/\/+$/, ""));
+    target.searchParams.set("code", code.trim().toUpperCase());
+
+    // Fetching a LAN server from a localhost-installed copy is cross-origin
+    // and browsers correctly block it. Navigate to that server first so its
+    // receive page and API share the same origin.
+    if (target.origin !== window.location.origin) {
+      cancelRetry();
+      window.location.assign(target.toString());
+      return;
+    }
+    fetchShare(server.replace(/\/+$/, ""), code.trim().toUpperCase());
+  }
 
   function handleManualSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -104,7 +149,7 @@ export function Receive() {
     const sharePart = combinedInput.slice(lastDot + 1).trim();
     try {
       const server = decodeConnectionCode(networkPart);
-      fetchShare(server, sharePart);
+      openShare(server, sharePart);
     } catch (err: any) {
       setError(err.message || "Couldn't read that code.");
     }
@@ -116,8 +161,8 @@ export function Receive() {
       const url = new URL(value);
       const server = url.searchParams.get("server");
       const code = url.searchParams.get("code");
-      if (server && code) {
-        fetchShare(server, code);
+      if (server && code && ["http:", "https:"].includes(new URL(server).protocol)) {
+        openShare(server, code);
         return;
       }
     } catch {
@@ -128,6 +173,13 @@ export function Receive() {
 
   function downloadUrl(fileId: number) {
     return `${serverUrl}/shares/${shareCode}/files/${fileId}/download`;
+  }
+
+  function downloadFile(file: ShareFile) {
+    const accepted = safetyStatus(file) === "clean" || confirm(
+      `Safety warning: ${safetyMessage(file)}\n\nOnly continue if you trust the sender. Download anyway?`
+    );
+    if (accepted) window.location.assign(`${downloadUrl(file.id)}?accept_risk=true`);
   }
 
   function previewUrl(fileId: number) {
@@ -148,7 +200,7 @@ export function Receive() {
           <p className="muted">Receive files from your tutor — no account needed.</p>
         </div>
 
-        <form className="auth-card" onSubmit={handleManualSubmit}>
+        <form className="auth-card" onSubmit={handleManualSubmit} autoComplete="off">
           {canUseCamera() ? (
             <>
               <button type="button" onClick={() => setShowScanner(true)}>
@@ -163,12 +215,25 @@ export function Receive() {
           <label>
             Share code
             <input
-              placeholder="e.g. R2M0-250Z-80.7KX2Q9"
+              type="text"
+              name="classync-share-code"
+              placeholder="Enter the code shown by the tutor"
               value={combinedInput}
-              onChange={(e) => setCombinedInput(e.target.value)}
+              onChange={(e) => handleCodeChange(e.target.value)}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              readOnly={false}
+              disabled={false}
               style={{ textTransform: "uppercase" }}
             />
           </label>
+
+          {combinedInput && (
+            <button type="button" className="secondary-button" onClick={() => setCombinedInput("")}>
+              Clear code
+            </button>
+          )}
 
           {error && <p className={retrying ? "muted" : "error"}>{error}</p>}
           {retrying && (
@@ -185,6 +250,8 @@ export function Receive() {
             View previously received files →
           </Link>
         </form>
+
+        <DeviceName />
 
         <InstallButton />
 
@@ -206,16 +273,31 @@ export function Receive() {
       <div className="share-card">
         <div className="page-header">
           <h2>{share.label}</h2>
-          {share.files.length > 1 && (
-            <a className="button" href={downloadAllUrl()}>
+          <div className="page-header-actions">
+            <button type="button" className="secondary-button" onClick={resetReceive}>
+              Enter another code
+            </button>
+            {share.files.length > 1 && (
+            <a className="button" href={share.files.some((f) => safetyStatus(f) !== "clean") ? undefined : downloadAllUrl()}
+              onClick={(e) => {
+                if (share.files.some((f) => safetyStatus(f) !== "clean")) {
+                  e.preventDefault();
+                  if (confirm("This share contains files that were not verified as safe. Only continue if you trust the sender. Download anyway?")) {
+                    window.location.assign(`${downloadAllUrl()}?accept_risk=true`);
+                  }
+                }
+              }}>
               Download all (.zip)
             </a>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="file-grid">
           {share.files.map((f) => {
             const kind = previewKind(f.content_type);
+            const scanStatus = safetyStatus(f);
+            const scanMessage = safetyMessage(f);
             return (
               <div key={f.id} className="file-card">
                 <div
@@ -234,12 +316,20 @@ export function Receive() {
                     {f.original_name}
                   </span>
                   <span className="muted">{formatSize(f.size_bytes)}</span>
+                  <span className={`safety-status safety-${scanStatus}`} title={scanMessage}>
+                    {scanStatus === "clean" ? "Verified clean" : scanStatus === "suspicious" ? "Potential risk" : "Not antivirus-scanned"}
+                  </span>
+                  {f.sha256 && (
+                    <span className="file-hash" title={`SHA-256: ${f.sha256}`}>SHA-256: {f.sha256.slice(0, 12)}…</span>
+                  )}
                 </div>
                 <div className="file-card-actions">
-                  {kind !== "none" && (
+                  {kind !== "none" && scanStatus === "clean" && (
                     <button onClick={() => setPreviewFile(f)}>Preview</button>
                   )}
-                  <a href={downloadUrl(f.id)}>Download</a>
+                  <button className={scanStatus === "clean" ? "" : "danger-button"} onClick={() => downloadFile(f)}>
+                    {scanStatus === "clean" ? "Download" : "Review risk"}
+                  </button>
                 </div>
               </div>
             );

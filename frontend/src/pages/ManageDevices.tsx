@@ -52,6 +52,11 @@ export function ManageDevices() {
     await load();
   }
 
+  async function handleAllow(deviceId: string, label: string) {
+    await api.post("/devices/promote", { device_id: deviceId, label });
+    await load();
+  }
+
   return (
     <div className="page">
       <h2>Devices</h2>
@@ -87,7 +92,7 @@ export function ManageDevices() {
             <th>Device ID</th>
             <th>Status</th>
             <th>Last seen</th>
-            <th></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -110,7 +115,10 @@ export function ManageDevices() {
               <td>{new Date(d.last_seen).toLocaleString()}</td>
               <td>
                 {d.can_share && !d.is_owner && (
-                  <button onClick={() => handleRevoke(d.device_id)}>Revoke</button>
+                  <button className="danger-button" onClick={() => handleRevoke(d.device_id)}>Block sharing</button>
+                )}
+                {!d.can_share && !d.is_owner && (
+                  <button onClick={() => handleAllow(d.device_id, d.label)}>Allow sharing</button>
                 )}
               </td>
             </tr>

@@ -45,7 +45,7 @@ export function ReceiveOnlyHome() {
       {ownerExists === true && (
         <details style={{ width: "min(100% - 2rem, 480px)", marginTop: "1rem" }}>
           <summary className="muted" style={{ cursor: "pointer" }}>
-            Are you the server administrator? Recover owner access
+            Already an owner? Link this phone or device
           </summary>
           <OwnerSetup recovery />
         </details>

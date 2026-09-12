@@ -10,7 +10,8 @@ import { History } from "./pages/History";
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <DeviceProvider>
+        <Routes>
         {/* Public — no connection or permission needed. Most people land here. */}
         <Route path="/receive" element={<Receive />} />
         <Route path="/history" element={<History />} />
@@ -19,11 +20,9 @@ export default function App() {
         <Route
           path="/"
           element={
-            <DeviceProvider>
-              <SharerGate>
-                <Dashboard />
-              </SharerGate>
-            </DeviceProvider>
+            <SharerGate>
+              <Dashboard />
+            </SharerGate>
           }
         >
           <Route index element={<Shares />} />
@@ -36,7 +35,8 @@ export default function App() {
             }
           />
         </Route>
-      </Routes>
+        </Routes>
+      </DeviceProvider>
     </BrowserRouter>
   );
 }

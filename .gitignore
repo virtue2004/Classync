@@ -6,3 +6,7 @@ backend/*.db
 backend/.env
 __pycache__/
 *.py[cod]
+backend/build/
+backend/dist/
+backend/*.spec
+release/

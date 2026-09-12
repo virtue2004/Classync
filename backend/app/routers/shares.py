@@ -5,7 +5,7 @@ import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile, Form, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from starlette.background import BackgroundTask
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from app.models import Device, Share, FileItem, AuditLog
 from app.schemas import ShareOut, ShareCreateResponse
 from app.device_auth import get_current_device, require_sharer
 from app.file_validation import validate_upload
+from app.file_scanner import scan_file
 from app.network import get_lan_ip
 from app.connection_code import encode_connection_code
 from app.rate_limit import limit
@@ -111,8 +112,18 @@ async def create_share(
                         sample.extend(chunk[:8192 - len(sample)])
                     destination.write(chunk)
             content_type = validate_upload(upload.filename, bytes(sample), size)
+            scan = scan_file(path, upload.filename)
             created_paths.append(path)
-            db.add(FileItem(original_name=upload.filename, stored_name=stored_name, content_type=content_type, size_bytes=size, share_id=share.id))
+            db.add(FileItem(
+                original_name=upload.filename,
+                stored_name=stored_name,
+                content_type=content_type,
+                size_bytes=size,
+                sha256=scan.sha256,
+                scan_status=scan.status,
+                scan_message=scan.message,
+                share_id=share.id,
+            ))
     except Exception:
         db.rollback()
         for path in created_paths + ([path] if 'path' in locals() else []):
@@ -128,6 +139,9 @@ async def create_share(
 
 @router.get("/mine", response_model=list[ShareOut])
 def list_my_shares(db: Session = Depends(get_db), device: Device = Depends(require_sharer)):
+    if device.is_owner:
+        # All linked owner devices represent the same superadmin workspace.
+        return db.query(Share).join(Device, Share.created_by_id == Device.id).filter(Device.is_owner.is_(True)).order_by(Share.created_at.desc()).all()
     return db.query(Share).filter(Share.created_by_id == device.id).order_by(Share.created_at.desc()).all()
 
 
@@ -141,7 +155,7 @@ def share_connect_info(
     share = db.query(Share).filter(Share.code == code.upper()).first()
     if not share:
         raise HTTPException(status_code=404, detail="Share not found")
-    if share.created_by_id != device.id:
+    if share.created_by_id != device.id and not (device.is_owner and share.created_by.is_owner):
         raise HTTPException(status_code=403, detail="You can only view your own shares' codes")
     if not share.is_active:
         raise HTTPException(status_code=410, detail="This share has been closed")
@@ -158,7 +172,7 @@ def close_share(
     share = db.query(Share).filter(Share.code == code.upper()).first()
     if not share:
         raise HTTPException(status_code=404, detail="Share not found")
-    if share.created_by_id != device.id:
+    if share.created_by_id != device.id and not (device.is_owner and share.created_by.is_owner):
         raise HTTPException(status_code=403, detail="You can only close your own shares")
 
     for item in list(share.files):
@@ -182,12 +196,14 @@ def view_share(code: str, request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/{code}/files/{file_id}/download")
-def download_share_file(code: str, file_id: int, request: Request, db: Session = Depends(get_db)):
+def download_share_file(code: str, file_id: int, request: Request, accept_risk: bool = Query(False), db: Session = Depends(get_db)):
     limit(request, "download", 60)
     share = _get_active_share(db, code)
     item = next((f for f in share.files if f.id == file_id), None)
     if not item:
         raise HTTPException(status_code=404, detail="File not found in this share")
+    if item.scan_status != "clean" and not accept_risk:
+        raise HTTPException(status_code=409, detail="This file was not verified as safe. Explicit risk acceptance is required.")
 
     path = Path(settings.UPLOAD_DIR) / item.stored_name
     if not path.exists():
@@ -206,6 +222,8 @@ def preview_share_file(code: str, file_id: int, db: Session = Depends(get_db)):
     item = next((f for f in share.files if f.id == file_id), None)
     if not item:
         raise HTTPException(status_code=404, detail="File not found in this share")
+    if item.scan_status != "clean":
+        raise HTTPException(status_code=409, detail="Preview is disabled because this file was not verified as safe")
 
     path = Path(settings.UPLOAD_DIR) / item.stored_name
     if not path.exists():
@@ -215,11 +233,13 @@ def preview_share_file(code: str, file_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{code}/download-all")
-def download_share_zip(code: str, request: Request, db: Session = Depends(get_db)):
+def download_share_zip(code: str, request: Request, accept_risk: bool = Query(False), db: Session = Depends(get_db)):
     limit(request, "download", 20)
     share = _get_active_share(db, code)
     if not share.files:
         raise HTTPException(status_code=404, detail="This share has no files")
+    if any(item.scan_status != "clean" for item in share.files) and not accept_risk:
+        raise HTTPException(status_code=409, detail="This share contains files that were not verified as safe. Explicit risk acceptance is required.")
 
     # The archive is written to a temporary file instead of occupying RAM.
     archive = Path(settings.UPLOAD_DIR) / f".download-{uuid.uuid4().hex}.zip"

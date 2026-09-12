@@ -98,6 +98,15 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.secondary-button {
+  background: #e2e8f0;
+  color: var(--text);
+}
+
+.secondary-button:hover {
+  background: #cbd5e1;
+}
+
 .muted {
   color: var(--muted);
   font-size: 0.85rem;
@@ -106,6 +115,35 @@ button:disabled {
 .error {
   color: var(--danger);
   font-size: 0.85rem;
+}
+
+.danger-button {
+  background: var(--danger);
+}
+
+.device-name-card {
+  width: min(100% - 2rem, 480px);
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: white;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.safety-status {
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.safety-clean { color: var(--success); }
+.safety-suspicious { color: var(--danger); }
+.safety-unscanned { color: var(--warning); }
+
+.file-hash {
+  color: var(--muted);
+  font-family: monospace;
+  font-size: 0.68rem;
 }
 
 /* ---- App shell ---- */
@@ -169,6 +207,13 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.25rem;
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .inline-form {
@@ -446,4 +491,52 @@ button:disabled {
   max-width: 400px;
   border-radius: 12px;
   background: black;
+}
+
+@media (max-width: 700px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    padding: 0.9rem;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .sidebar h1 {
+    width: 100%;
+    margin: 0;
+  }
+
+  .sidebar p {
+    margin: 0;
+  }
+
+  .content {
+    width: 100%;
+    padding: 1rem;
+  }
+
+  .page {
+    overflow-x: auto;
+  }
+
+  .auth-card {
+    padding: 1.25rem;
+  }
+
+  .page-header {
+    align-items: flex-start;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .table th,
+  .table td {
+    padding: 0.6rem;
+    font-size: 0.78rem;
+  }
 }

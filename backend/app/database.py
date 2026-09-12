@@ -23,6 +23,15 @@ def run_migrations() -> None:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE devices ADD COLUMN device_token VARCHAR(128)"))
 
+    file_columns = {column["name"] for column in inspector.get_columns("files")} if "files" in inspector.get_table_names() else set()
+    with engine.begin() as connection:
+        if "sha256" not in file_columns:
+            connection.execute(text("ALTER TABLE files ADD COLUMN sha256 VARCHAR(64) NOT NULL DEFAULT ''"))
+        if "scan_status" not in file_columns:
+            connection.execute(text("ALTER TABLE files ADD COLUMN scan_status VARCHAR(20) NOT NULL DEFAULT 'unscanned'"))
+        if "scan_message" not in file_columns:
+            connection.execute(text("ALTER TABLE files ADD COLUMN scan_message VARCHAR(255) NOT NULL DEFAULT 'Uploaded before safety scanning was enabled'"))
+
 
 def get_db():
     """FastAPI dependency: yields a DB session and always closes it."""

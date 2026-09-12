@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -34,7 +35,10 @@ def health():
     return {"status": "ok", "instance": settings.INSTANCE_NAME}
 
 
-DIST_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if getattr(sys, "frozen", False):
+    DIST_DIR = Path(getattr(sys, "_MEIPASS")) / "frontend" / "dist"
+else:
+    DIST_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 
 @app.get("/{path:path}", include_in_schema=False)

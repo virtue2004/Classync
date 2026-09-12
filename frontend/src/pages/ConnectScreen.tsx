@@ -77,9 +77,13 @@ export function ConnectScreen() {
           <label>
             Connection code
             <input
-              placeholder="e.g. R2M0-250Z-80"
+              name="classync-connection-code"
+              placeholder="Enter the server connection code"
               value={codeInput}
               onChange={(e) => setCodeInput(e.target.value)}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
               style={{ textTransform: "uppercase" }}
             />
           </label>

@@ -59,6 +59,9 @@ class FileItem(Base):
     stored_name: Mapped[str] = mapped_column(String(255), unique=True)
     content_type: Mapped[str] = mapped_column(String(120))
     size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64), default="")
+    scan_status: Mapped[str] = mapped_column(String(20), default="unscanned")
+    scan_message: Mapped[str] = mapped_column(String(255), default="Antivirus scan unavailable")
 
     share_id: Mapped[int] = mapped_column(ForeignKey("shares.id"))
     share: Mapped["Share"] = relationship(back_populates="files")
